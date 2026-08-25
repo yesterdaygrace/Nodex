@@ -21,8 +21,11 @@ func main() {
 	//inisialiasai Gin
 	router := gin.Default()
 
-	//panggil koneksi database
-	models.ConnectDatabase()
+	//panggil koneksi database — explicit error handling, no panic
+	if _, err := models.ConnectDatabase(); err != nil {
+		slog.Error("failed to connect database", "error", err)
+		os.Exit(1)
+	}
 
 	//membuat route dengan method GET
 	router.GET("/", func(c *gin.Context) {

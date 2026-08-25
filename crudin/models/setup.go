@@ -1,9 +1,9 @@
 package models
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
-	"strconv"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -35,16 +35,13 @@ func dbDSN() string {
 // ConnectDatabase opens the database, runs the schema migrations, and
 // assigns the resulting handle to DB.
 //
-// Lifecycle events (connection established, retry attempts) are logged via
-// log/slog as structured records (JSON on most systems), so the app's
-// startup diagnostics stay machine-readable.
+// It returns the handle and any error instead of panicking, so the caller
+// (main.go) can decide how to handle startup failure. The global DB is
+// also set for backward compat during the migration — callers still reading
+// models.DB keep working while new code can use the returned *gorm.DB.
 //
-// It retries for a few seconds on startup: when crudin is started via
-// docker-compose the Go process and Postgres boot in parallel, so a
-// brief "connection refused" is expected. Only if the database stays
-// unreachable does the app panic, since without a database the API
-// cannot serve its core endpoints.
-func ConnectDatabase() {
+// Lifecycle events are logged via log/slog as structured records.
+func ConnectDatabase() (*gorm.DB, error) {
 	dsn := dbDSN()
 
 	const attempts = 5
@@ -55,11 +52,11 @@ func ConnectDatabase() {
 		if err == nil {
 			// Connection succeeded: migrate the schema, then publish the handle.
 			if err := db.AutoMigrate(&Post{}); err != nil {
-				panic("failed to migrate database: " + err.Error())
+				return nil, fmt.Errorf("failed to migrate database: %w", err)
 			}
 			DB = db
 			slog.Info("database connection established")
-			return
+			return db, nil
 		}
 
 		lastErr = err
@@ -73,5 +70,5 @@ func ConnectDatabase() {
 		}
 	}
 
-	panic("failed to connect database after " + strconv.Itoa(attempts) + " attempts: " + lastErr.Error())
+	return nil, fmt.Errorf("failed to connect database after %d attempts: %w", attempts, lastErr)
 }
