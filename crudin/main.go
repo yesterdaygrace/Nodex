@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"crudin/controllers"
 	"crudin/models"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,8 +23,10 @@ func main() {
 	//inisialiasai Gin
 	router := gin.Default()
 
-	//panggil koneksi database — explicit error handling, no panic
-	if _, err := models.ConnectDatabase(); err != nil {
+	//panggil koneksi database — explicit error handling with 10s timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := models.ConnectDatabase(ctx); err != nil {
 		slog.Error("failed to connect database", "error", err)
 		os.Exit(1)
 	}

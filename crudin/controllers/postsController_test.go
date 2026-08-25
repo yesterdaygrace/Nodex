@@ -1,6 +1,7 @@
 package controllers_test
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -65,7 +66,7 @@ func TestMain(m *testing.M) {
 	// Keep request-log noise out of test output.
 	gin.SetMode(gin.TestMode)
 
-	if _, err := models.ConnectDatabase(); err != nil {
+	if _, err := models.ConnectDatabase(context.Background()); err != nil {
 		log.Fatalf("connect database: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -35,23 +36,28 @@ func dbDSN() string {
 // ConnectDatabase opens the database, runs the schema migrations, and
 // assigns the resulting handle to DB.
 //
-// It returns the handle and any error instead of panicking, so the caller
-// (main.go) can decide how to handle startup failure. The global DB is
-// also set for backward compat during the migration — callers still reading
-// models.DB keep working while new code can use the returned *gorm.DB.
-//
-// Lifecycle events are logged via log/slog as structured records.
-func ConnectDatabase() (*gorm.DB, error) {
+// It takes a context for timeout/cancellation, returns the handle and any
+// error instead of panicking, and checks ctx.Err() between retry attempts
+// so a slow upstream or cancelled context does not hang indefinitely.
+// The global DB is also set for backward compat while new code can use the
+// returned *gorm.DB.
+func ConnectDatabase(ctx context.Context) (*gorm.DB, error) {
 	dsn := dbDSN()
 
 	const attempts = 5
 	var lastErr error
 
 	for i := 1; i <= attempts; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 		if err == nil {
-			// Connection succeeded: migrate the schema, then publish the handle.
-			if err := db.AutoMigrate(&Post{}); err != nil {
+			// Use the caller's context for AutoMigrate so it respects timeout.
+			if err := db.WithContext(ctx).AutoMigrate(&Post{}); err != nil {
 				return nil, fmt.Errorf("failed to migrate database: %w", err)
 			}
 			DB = db
@@ -66,7 +72,11 @@ func ConnectDatabase() (*gorm.DB, error) {
 			"error", err,
 		)
 		if i < attempts {
-			time.Sleep(2 * time.Second)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
 		}
 	}
 

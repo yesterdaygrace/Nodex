@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"crudin/models"
 
@@ -66,8 +68,11 @@ func FindPosts(c *gin.Context) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var posts []models.Post
-	query := models.DB.Model(&models.Post{}).Order("created_at DESC, id DESC")
+	query := models.DB.WithContext(ctx).Model(&models.Post{}).Order("created_at DESC, id DESC")
 
 	// Status filter: All Notes (no ?status) shows active only (exclude
 	// archived per Nodex §34), while ?status=archived/published/draft
@@ -130,8 +135,11 @@ func FindTrashedPosts(c *gin.Context) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var posts []models.Post
-	query := models.DB.Unscoped().
+	query := models.DB.WithContext(ctx).Unscoped().
 		Model(&models.Post{}).
 		Where("deleted_at IS NOT NULL").
 		Order("deleted_at DESC, id DESC")
@@ -231,6 +239,9 @@ func StorePost(c *gin.Context) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	// Create the post, defaulting absent status to "published".
 	post := models.Post{
 		Title:   input.Title,
@@ -239,7 +250,7 @@ func StorePost(c *gin.Context) {
 		Folder:  input.Folder,
 		Tags:    input.Tags,
 	}
-	if err := models.DB.Create(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Create(&post).Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to create post")
 		return
 	}
@@ -255,8 +266,11 @@ func StorePost(c *gin.Context) {
 // record (404) from a real database error (500). trashed posts are hidden
 // by GORM's default scope and read as "not found".
 func FindPostById(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -274,8 +288,11 @@ func FindPostById(c *gin.Context) {
 
 // UpdatePost modifies an existing post.
 func UpdatePost(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -307,7 +324,7 @@ func UpdatePost(c *gin.Context) {
 	}
 
 	// Apply updates. Status is only written when explicitly provided.
-	if err := models.DB.Model(&post).Updates(input).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Model(&post).Updates(input).Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to update post")
 		return
 	}
@@ -323,8 +340,11 @@ func UpdatePost(c *gin.Context) {
 // UPDATE setting deleted_at because Post carries a DeletedAt field, so the
 // row is preserved and excluded from normal listings.
 func DeletePost(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -333,7 +353,7 @@ func DeletePost(c *gin.Context) {
 		return
 	}
 
-	if err := models.DB.Delete(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Delete(&post).Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to delete post")
 		return
 	}
@@ -347,8 +367,11 @@ func DeletePost(c *gin.Context) {
 // RestorePost un-soft-deletes a trashed post. Unscoped() lets the lookup see
 // soft-deleted rows; the restore clears deleted_at back to NULL.
 func RestorePost(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Unscoped().Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Unscoped().Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -357,7 +380,7 @@ func RestorePost(c *gin.Context) {
 		return
 	}
 
-	if err := models.DB.Unscoped().Model(&post).Update("deleted_at", nil).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Unscoped().Model(&post).Update("deleted_at", nil).Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to restore post")
 		return
 	}
@@ -374,8 +397,11 @@ func RestorePost(c *gin.Context) {
 // on deleted_at IS NOT NULL so a live (non-trashed) post yields 404 rather
 // than being silently hard-deleted.
 func DeletePermanentPost(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Unscoped().Where("id = ? AND deleted_at IS NOT NULL", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Unscoped().Where("id = ? AND deleted_at IS NOT NULL", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -384,7 +410,7 @@ func DeletePermanentPost(c *gin.Context) {
 		return
 	}
 
-	if err := models.DB.Unscoped().Delete(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Unscoped().Delete(&post).Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to permanently delete post")
 		return
 	}
@@ -397,8 +423,11 @@ func DeletePermanentPost(c *gin.Context) {
 
 // ArchivePost moves a post to Archive by setting status=archived.
 func ArchivePost(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -406,7 +435,7 @@ func ArchivePost(c *gin.Context) {
 		}
 		return
 	}
-	if err := models.DB.Model(&post).Update("status", "archived").Error; err != nil {
+	if err := models.DB.WithContext(ctx).Model(&post).Update("status", "archived").Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to archive post")
 		return
 	}
@@ -420,8 +449,11 @@ func ArchivePost(c *gin.Context) {
 
 // UnarchivePost restores an archived post to published.
 func UnarchivePost(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var post models.Post
-	if err := models.DB.Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
+	if err := models.DB.WithContext(ctx).Where("id = ?", c.Param("id")).First(&post).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(c, http.StatusNotFound, "Post not found")
 		} else {
@@ -429,7 +461,7 @@ func UnarchivePost(c *gin.Context) {
 		}
 		return
 	}
-	if err := models.DB.Model(&post).Update("status", "published").Error; err != nil {
+	if err := models.DB.WithContext(ctx).Model(&post).Update("status", "published").Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to unarchive post")
 		return
 	}
