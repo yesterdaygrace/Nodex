@@ -1,4 +1,4 @@
-module crudin
+module Nodex
 
 go 1.25.0
 

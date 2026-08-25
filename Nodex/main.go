@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"crudin/controllers"
-	"crudin/models"
+	"Nodex/controllers"
+	"Nodex/models"
 	"log/slog"
 	"net/http"
 	"os"

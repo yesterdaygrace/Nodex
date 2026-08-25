@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"crudin/controllers"
-	"crudin/models"
+	"Nodex/controllers"
+	"Nodex/models"
 
 	"github.com/gin-gonic/gin"
 )
