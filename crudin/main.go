@@ -5,7 +5,10 @@ import (
 	"crudin/controllers"
 	"crudin/models"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,6 +57,27 @@ func main() {
 	router.PUT("/api/posts/:id/archive", controllers.ArchivePost)
 	router.PUT("/api/posts/:id/unarchive", controllers.UnarchivePost)
 
-	//mulai server dengan port 3001
-	router.Run(":3001")
+	//mulai server dengan port 3001 — bounded timeouts + graceful shutdown
+	srv := &http.Server{
+		Addr:         ":3001",
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  30 * time.Second,
+	}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	slog.Info("shutting down server")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server shutdown error", "error", err)
+	}
 }
