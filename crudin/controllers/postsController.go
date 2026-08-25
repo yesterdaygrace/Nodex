@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"crudin/models"
@@ -17,13 +18,19 @@ import (
 
 // ValidatePostInput is the request DTO for creating/updating a Post.
 // Status is optional: "published" | "draft" | "archived" (§34-35 Archive).
-// Folder/Tags are optional Nodex organization fields (§11-12).
+// Folder/Tags are optional Nodex organization fields (§11-12) with length caps.
 type ValidatePostInput struct {
 	Title   string `json:"title" binding:"required"`
 	Content string `json:"content" binding:"required"`
-	Status  string `json:"status"`
-	Folder  string `json:"folder"`
-	Tags    string `json:"tags"`
+	Status  string `json:"status" binding:"omitempty,max=20"`
+	Folder  string `json:"folder" binding:"omitempty,max=100"`
+	Tags    string `json:"tags" binding:"omitempty,max=500"`
+}
+
+// escapeLike escapes % and _ for LIKE queries.
+func escapeLike(s string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(s)
 }
 
 // isValidPostStatus reports whether s is an accepted post status.
@@ -87,12 +94,13 @@ func FindPosts(c *gin.Context) {
 		query = query.Where("status != ?", "archived")
 	}
 
-	// Nodex §11-12: optional folder/tags filters (Folder exact, Tags LIKE).
+	// Nodex §11-12: optional folder/tags filters (Folder exact, Tags LIKE escaped).
 	if folder := c.Query("folder"); folder != "" {
 		query = query.Where("folder = ?", folder)
 	}
 	if tags := c.Query("tags"); tags != "" {
-		query = query.Where("tags LIKE ?", "%"+tags+"%")
+		escaped := escapeLike(tags)
+		query = query.Where("tags LIKE ?", "%"+escaped+"%")
 	}
 
 	var total int64
@@ -152,7 +160,8 @@ func FindTrashedPosts(c *gin.Context) {
 		query = query.Where("folder = ?", folder)
 	}
 	if tags := c.Query("tags"); tags != "" {
-		query = query.Where("tags LIKE ?", "%"+tags+"%")
+		escaped := escapeLike(tags)
+		query = query.Where("tags LIKE ?", "%"+escaped+"%")
 	}
 
 	var total int64

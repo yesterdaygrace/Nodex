@@ -19,10 +19,10 @@ type Post struct {
 	Id        int            `json:"id" gorm:"primary_key"`
 	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
-	Status    string         `json:"status" gorm:"default:published"`
+	Status    string         `json:"status" gorm:"default:published;index"`
 	Title     string         `json:"title"`
 	Content   string         `json:"content"`
-	Folder    string         `json:"folder"`
+	Folder    string         `json:"folder" gorm:"index"`
 	Tags      string         `json:"tags"`
-	DeletedAt gorm.DeletedAt `json:"-"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
