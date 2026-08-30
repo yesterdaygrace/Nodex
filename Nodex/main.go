@@ -76,8 +76,8 @@ func main() {
 		sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	}
 
-	// API routes
-	router.GET("/", func(c *gin.Context) {
+	// API routes - keep Hello World at /api for health UX, root serves frontend if present
+	router.GET("/api", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Hello World!"})
 	})
 	router.GET("/api/posts", controllers.FindPosts)
@@ -93,19 +93,34 @@ func main() {
 
 	// Serve frontend static if built (single-domain deploys per DEPLOY.md §50)
 	frontendDist := filepath.Join("frontend", "dist")
+	hasFrontend := false
 	if _, err := os.Stat(frontendDist); err == nil {
+		if _, err2 := os.Stat(filepath.Join(frontendDist, "index.html")); err2 == nil {
+			hasFrontend = true
+		}
+	}
+	if hasFrontend {
 		slog.Info("serving frontend", "dir", frontendDist)
 		router.Static("/assets", filepath.Join(frontendDist, "assets"))
 		router.StaticFile("/vite.svg", filepath.Join(frontendDist, "vite.svg"))
+		// Root serves SPA index.html, /api keeps Hello World JSON
+		router.GET("/", func(c *gin.Context) {
+			c.File(filepath.Join(frontendDist, "index.html"))
+		})
 		// SPA fallback: serve index.html for non-API, non-health routes
 		router.NoRoute(func(c *gin.Context) {
 			path := c.Request.URL.Path
 			// API / health / ready should return JSON 404, not SPA
-			if strings.HasPrefix(path, "/api/") || path == "/health" || path == "/ready" {
+			if strings.HasPrefix(path, "/api/") || path == "/health" || path == "/ready" || strings.HasPrefix(path, "/assets/") {
 				c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "not found", "data": nil})
 				return
 			}
 			c.File(filepath.Join(frontendDist, "index.html"))
+		})
+	} else {
+		// No frontend build - keep simple Hello World at root
+		router.GET("/", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "Hello World!"})
 		})
 	}
 
