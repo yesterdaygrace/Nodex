@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+README.md
+Dockerfile
+docker-compose.yml
+tmp/
+logs/
+coverage/
+*.log
+node_modules/
+frontend/node_modules/
+.gitignore
+bin/
