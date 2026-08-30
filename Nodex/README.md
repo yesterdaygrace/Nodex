@@ -215,3 +215,4 @@ crudin/
   default (12-factor style), so nothing is baked into the binary.
 - **Startup resilience** — a short retry-with-backoff tolerates Postgres booting
   at the same time as the app.
+<!-- auto test 2 2026-08-30T16:51:34Z -->
